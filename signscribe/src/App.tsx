@@ -2,7 +2,9 @@ import { useRef, useState } from "react";
 import { useCamera } from "./hooks/useCamera";
 import { useLandmarks } from "./hooks/useLandmarks";
 import { useFingerspelling } from "./hooks/useFingerspelling";
+import { useSignRecorder } from "./hooks/useSignRecorder";
 import CapturePanel from "./CapturePanel";
+import SignCapturePanel from "./SignCapturePanel";
 import "./App.css";
 
 const DEV = import.meta.env.DEV;
@@ -11,10 +13,13 @@ export default function App() {
   const { videoRef, running, error, start, stop } = useCamera();
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
   const [mirror, setMirror] = useState(false);
-  const [showOverlay, setShowOverlay] = useState(DEV); // tracking overlay, dev only
-  const [captureMode, setCaptureMode] = useState(false); // dev data capture
+  const [showOverlay, setShowOverlay] = useState(DEV);
+  const [captureMode, setCaptureMode] = useState(false); // letter capture
+  const [signCapture, setSignCapture] = useState(false); // sign-clip capture
   const [transcript, setTranscript] = useState("");
   const [copied, setCopied] = useState(false);
+
+  const inCapture = captureMode || signCapture;
 
   const { ready, loadError, stats, frameRef } = useLandmarks({
     videoRef,
@@ -23,9 +28,11 @@ export default function App() {
     showOverlay,
   });
 
+  const sign = useSignRecorder({ frameRef });
+
   const fs = useFingerspelling({
     frameRef,
-    active: running && !captureMode,
+    active: running && !inCapture && !sign.recording,
     onCommit: (letter) => setTranscript((t) => t + letter),
   });
 
@@ -36,10 +43,21 @@ export default function App() {
     try {
       await navigator.clipboard.writeText(transcript);
     } catch {
-      /* clipboard blocked; nothing to do */
+      /* clipboard blocked */
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
+  };
+
+  const onSign = async () => {
+    if (sign.recording) {
+      const preds = await sign.stop();
+      if (preds && preds[0]) {
+        setTranscript((t) => t + (t && !t.endsWith(" ") ? " " : "") + preds[0].word + " ");
+      }
+    } else {
+      sign.start();
+    }
   };
 
   return (
@@ -62,7 +80,7 @@ export default function App() {
           <span className="dot" /> {statusLabel}
         </div>
 
-        {DEV && running && !captureMode && (
+        {DEV && running && !inCapture && (
           <div className="hud">
             {ready ? (
               <>
@@ -82,7 +100,10 @@ export default function App() {
           </div>
         )}
 
-        {running && !ready && !loadError && (
+        {running && sign.recording && (
+          <div className="stage-note">Signing… make the sign, then press Read</div>
+        )}
+        {running && !ready && !loadError && !sign.recording && (
           <div className="stage-note">Loading tracking…</div>
         )}
         {running && loadError && (
@@ -108,19 +129,29 @@ export default function App() {
 
       {captureMode ? (
         <CapturePanel frameRef={frameRef} />
+      ) : signCapture ? (
+        <SignCapturePanel frameRef={frameRef} />
       ) : (
         <div className="transcript">
           <div className="label">
             <span>Transcript</span>
-            <span className="phase-note">phase 2 · fingerspelling</span>
+            <span className="phase-note">phase 3 · signs + fingerspelling</span>
           </div>
           <div className="text">
             {transcript ? (
               transcript
             ) : (
-              <span className="ph">Fingerspell a letter and it appears here.</span>
+              <span className="ph">Fingerspell, or press Sign for a whole word.</span>
             )}
           </div>
+          {sign.last && sign.last.length > 0 && (
+            <div className="guesses">
+              guesses:{" "}
+              {sign.last
+                .map((p) => `${p.word} ${Math.round(p.prob * 100)}%`)
+                .join(" · ")}
+            </div>
+          )}
         </div>
       )}
 
@@ -131,7 +162,23 @@ export default function App() {
         >
           <span className="ico" /> {running ? "Stop" : "Start"}
         </button>
-        {!captureMode && (
+
+        {running && !inCapture && sign.ready && (
+          <button
+            className={"btn" + (sign.recording ? " signing" : "")}
+            onClick={onSign}
+          >
+            {sign.recording ? "Read sign" : "Sign word"}
+          </button>
+        )}
+
+        {DEV && running && !inCapture && sign.ready && sign.last && (
+          <button className="btn" onClick={sign.dumpLast}>
+            Dump clip
+          </button>
+        )}
+
+        {!inCapture && (
           <>
             <button className="btn" onClick={copy} disabled={!transcript.trim()}>
               {copied ? "Copied" : "Copy"}
@@ -151,9 +198,25 @@ export default function App() {
             <input
               type="checkbox"
               checked={captureMode}
-              onChange={(e) => setCaptureMode(e.target.checked)}
+              onChange={(e) => {
+                setCaptureMode(e.target.checked);
+                if (e.target.checked) setSignCapture(false);
+              }}
             />
-            <span className="sw" /> Capture
+            <span className="sw" /> Letters
+          </label>
+        )}
+        {DEV && (
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={signCapture}
+              onChange={(e) => {
+                setSignCapture(e.target.checked);
+                if (e.target.checked) setCaptureMode(false);
+              }}
+            />
+            <span className="sw" /> Sign rec
           </label>
         )}
         {DEV && (
@@ -177,9 +240,9 @@ export default function App() {
       </div>
 
       <p className="foot">
-        <b>Phase 2.</b> Fingerspelling runs on your machine. Turn on Capture to
-        record your own hand samples for the letters it gets wrong, then we retrain
-        so it learns your signing.
+        <b>Phase 3.</b> Fingerspelling runs continuously. For a whole word, press
+        Sign, make the sign, then press Read. Turn on Sign rec to record your own
+        examples of each word, then we retrain on your signing.
       </p>
     </div>
   );

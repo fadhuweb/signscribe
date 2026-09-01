@@ -42,10 +42,11 @@ export async function createTrackers(): Promise<Trackers> {
     baseOptions: { modelAssetPath: HAND_MODEL, delegate: "GPU" },
     runningMode: "VIDEO",
     numHands: 2,
-    // Lower thresholds so the tracker holds the hand instead of dropping it.
-    minHandDetectionConfidence: 0.4,
-    minHandPresenceConfidence: 0.4,
-    minTrackingConfidence: 0.4,
+    // Low thresholds so the tracker holds a fist or a hand against the body
+    // instead of dropping it.
+    minHandDetectionConfidence: 0.3,
+    minHandPresenceConfidence: 0.3,
+    minTrackingConfidence: 0.3,
   });
   const pose = await PoseLandmarker.createFromOptions(vision, {
     baseOptions: { modelAssetPath: POSE_MODEL, delegate: "GPU" },

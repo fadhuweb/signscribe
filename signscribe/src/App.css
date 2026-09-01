@@ -211,6 +211,17 @@
   font-size: 1.05rem;
   color: var(--faint);
 }
+.transcript .guesses {
+  margin-top: 12px;
+  font-family: "Space Mono", monospace;
+  font-size: 0.74rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.btn.signing {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 @media (max-width: 520px) {
   .transcript .text {
     font-size: 1.35rem;
@@ -437,4 +448,20 @@
   margin-top: 12px;
   color: var(--danger);
   font-size: 0.82rem;
+}
+
+/* sign-clip capture: wider chips with the word and take count side by side */
+.cap-letters.words {
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+}
+.cap-chip.word {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  text-align: left;
+}
+.cap-chip.word .cap-n {
+  margin-left: 8px;
 }
