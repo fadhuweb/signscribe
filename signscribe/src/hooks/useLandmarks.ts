@@ -75,6 +75,13 @@ export function useLandmarks({ videoRef, overlayRef, active, showOverlay }: Opti
     let frames = 0;
     let fpsClock = performance.now();
 
+    // Pose is the expensive detector and only feeds shoulder position, which
+    // moves slowly. Run it every few frames and reuse the last result. Hands run
+    // every frame. This roughly doubles the frame rate on a slow machine.
+    const POSE_EVERY = 3;
+    let poseTick = 0;
+    let lastPose: LandmarkFrame["pose"] = null;
+
     const loop = () => {
       const v = videoRef.current;
       if (!v || v.readyState < 2) {
@@ -88,7 +95,11 @@ export function useLandmarks({ videoRef, overlayRef, active, showOverlay }: Opti
       lastTsRef.current = ts;
 
       const handRes = trackers.hand.detectForVideo(v, ts);
-      const poseRes = trackers.pose.detectForVideo(v, ts);
+      poseTick++;
+      if (poseTick % POSE_EVERY === 0) {
+        const poseRes = trackers.pose.detectForVideo(v, ts);
+        lastPose = poseRes.landmarks?.[0] ?? null;
+      }
 
       const hands = (handRes.landmarks ?? []).map((lm, i) => {
         const cat = handRes.handedness?.[i]?.[0];
@@ -101,7 +112,7 @@ export function useLandmarks({ videoRef, overlayRef, active, showOverlay }: Opti
           vector: handVector(lm),
         };
       });
-      const pose = poseRes.landmarks?.[0] ?? null;
+      const pose = lastPose;
 
       // This is the stream later phases consume.
       frameRef.current = { timestamp: ts, hands, pose };

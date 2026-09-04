@@ -39,18 +39,41 @@ export type Trackers = {
 export async function createTrackers(): Promise<Trackers> {
   const vision = await FilesetResolver.forVisionTasks(WASM);
   const hand = await HandLandmarker.createFromOptions(vision, {
-    baseOptions: { modelAssetPath: HAND_MODEL, delegate: "GPU" },
+    baseOptions: { modelAssetPath: HAND_MODEL, delegate: "CPU" },
     runningMode: "VIDEO",
     numHands: 2,
-    // Low thresholds so the tracker holds a fist or a hand against the body
-    // instead of dropping it.
-    minHandDetectionConfidence: 0.3,
-    minHandPresenceConfidence: 0.3,
-    minTrackingConfidence: 0.3,
+    // Very low thresholds so the tracker still grabs and holds a hand that is
+    // against the body, where contrast is poor and it would otherwise drop it.
+    minHandDetectionConfidence: 0.1,
+    minHandPresenceConfidence: 0.1,
+    minTrackingConfidence: 0.1,
   });
   const pose = await PoseLandmarker.createFromOptions(vision, {
-    baseOptions: { modelAssetPath: POSE_MODEL, delegate: "GPU" },
+    baseOptions: { modelAssetPath: POSE_MODEL, delegate: "CPU" },
     runningMode: "VIDEO",
+    numPoses: 1,
+  });
+  return { hand, pose };
+}
+
+/**
+ * IMAGE-mode trackers. These run detection on one still frame at a time, the
+ * same way the training data was extracted. Kept for reference; the record-then-
+ * process path now uses the VIDEO trackers above so it can track the hand across
+ * a clip instead of re-finding it on every frame.
+ */
+export async function createImageTrackers(): Promise<Trackers> {
+  const vision = await FilesetResolver.forVisionTasks(WASM);
+  const hand = await HandLandmarker.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: HAND_MODEL, delegate: "CPU" },
+    runningMode: "IMAGE",
+    numHands: 2,
+    minHandDetectionConfidence: 0.1,
+    minHandPresenceConfidence: 0.1,
+  });
+  const pose = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: POSE_MODEL, delegate: "CPU" },
+    runningMode: "IMAGE",
     numPoses: 1,
   });
   return { hand, pose };
